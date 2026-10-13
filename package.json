@@ -1,0 +1,13 @@
+{
+  "name": "motion-studio",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "render": "node render.mjs",
+    "test": "node --test",
+    "check:demo": "node render.mjs projects/_template --format all --check"
+  },
+  "dependencies": {
+    "playwright": "^1.64.0"
+  }
+}

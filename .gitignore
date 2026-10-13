@@ -1,0 +1,14 @@
+node_modules/
+**/out/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+references/videos/
+*.tmp.*
+
+# vídeos são saídas: cada projeto fica só na máquina (o estúdio versiona as ferramentas)
+projects/*
+!projects/_template/

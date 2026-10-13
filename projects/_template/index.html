@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Template — Motion Studio</title>
+<style>
+  @font-face { font-family: 'Archivo'; src: url(/lib/fonts/Archivo-latin.woff2) format('woff2'); font-weight: 100 900; font-stretch: 62% 125%; font-display: block; }
+  @font-face { font-family: 'JetBrains Mono'; src: url(/lib/fonts/JetBrainsMono-latin.woff2) format('woff2'); font-weight: 400 700; font-display: block; }
+  :root {
+    --bg: #0e0e0c;
+    --ink: #f2efe6;
+    --dim: #8a867c;
+    --accent: #ff4d1f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { overflow: hidden; background: var(--bg); }
+  #stage { position: relative; overflow: hidden; color: var(--ink); font-family: 'Archivo', sans-serif; background: var(--bg); }
+  #world { position: absolute; left: 0; top: 0; }
+  .abs { position: absolute; }
+  .big { font-weight: 800; font-stretch: 62%; text-transform: uppercase; line-height: .84; letter-spacing: -.01em; white-space: nowrap; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-weight: 500; letter-spacing: .02em; color: var(--dim); }
+  .line { height: 3px; background: var(--ink); transform-origin: left center; }
+  #flood { inset: 0; background: var(--accent); z-index: 20; }
+  #end { z-index: 21; color: var(--bg); }
+  #e2 { color: var(--bg); opacity: .75; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="world">
+    <div class="abs line" id="line"></div>
+    <div class="abs big" id="w1">Motion</div>
+    <div class="abs big" id="w2">Studio</div>
+  </div>
+  <div class="abs" id="flood"></div>
+  <div class="abs" id="end">
+    <div class="big" id="e1">seek(t)</div>
+    <div class="mono" id="e2">index.html → playwright → ffmpeg → mp4</div>
+  </div>
+</div>
+
+<script src="/lib/studio.js"></script>
+<script>
+const { E, prog, mix, beats, split, rise, fit, typeOn, flood, show, camera, applyCamera, punch, grain, synth, define, format, layout } = Studio;
+
+// ---------- formato e grade ----------
+const F = format('16x9');
+const { W, H } = F;
+const BPM = 120, b = beats(BPM);            // b(n): batidas → segundos (0,5s por batida)
+const DURATION = b(12);
+// Margens: 6% das bordas, e nunca dentro da zona de interface do app (9:16: direita 15%).
+// Layout por formato: área útil (margens + zona de UI do app) e escala tipográfica de vídeo.
+// A mesma cena roda em 16x9, 9x16, 1x1 e 4x5 (render --format all).
+const L = layout(F);
+const ZOOM = 1.035;                         // aproximação da câmera até o fim (ver seek)
+const B = L.camSafe(ZOOM);                  // área útil que segue segura mesmo com o zoom
+const ML = B.x, MR = W - B.x - B.w, CW = B.w;
+const $ = (id) => document.getElementById(id);
+Object.assign($('stage').style, { width: `${W}px`, height: `${H}px` });
+
+// ---------- montagem (uma vez, depois das fontes: medir texto antes disso mede a fonte errada) ----------
+let L1, L2, E1, film, FX, FY;
+async function setup() {
+await Promise.all([document.fonts.load('800 100px Archivo'), document.fonts.load("500 26px 'JetBrains Mono'")]);
+// Tipografia que enche o quadro: a palavra ocupa a largura útil, não um tamanho "de site".
+// Limite pela altura também: duas linhas + respiro cabem entre as margens de cima e de baixo.
+// split ANTES de fit: letras em caixas próprias perdem o kerning e a palavra fica mais larga
+L1 = split($('w1'));
+L2 = split($('w2'));
+const size = Math.min(fit($('w1'), CW), fit($('w2'), CW), (B.h / 2 - L.gap) / 0.98);
+$('w1').style.fontSize = $('w2').style.fontSize = `${size}px`;
+const gap = size * 0.08;
+const lineY = H / 2;
+Object.assign($('w1').style, { left: `${ML}px`, top: `${lineY - gap - size * 0.84}px` });
+Object.assign($('w2').style, { left: `${ML}px`, top: `${lineY + gap}px` });
+Object.assign($('line').style, { left: `${ML}px`, top: `${lineY - 1.5}px`, width: `${CW}px` });
+
+E1 = split($('e1'));
+fit($('e1'), CW * (F.vertical ? 1 : 0.62));
+// linha de apoio: tamanho da escala de vídeo, mas nunca mais larga que a área útil
+$('e2').style.fontSize = `${Math.min(L.type.small * F.pick({ '9x16': 1.2, default: 1 }), fit($('e2'), CW))}px`;
+Object.assign($('end').style, { left: `${ML}px`, bottom: `${H - B.y - B.h}px` });
+$('e2').style.marginTop = '24px';
+
+film = grain($('stage'), { W, H, opacity: 0.08, blend: 'overlay' });
+
+// Ponto de onde a cor nasce: a ponta direita da linha.
+FX = W - MR; FY = lineY;
+}
+
+// ---------- quadro em t ----------
+function seek(t) {
+  // câmera: aproximação lenta e contínua (log), golpe discreto na entrada de STUDIO
+  const cam = camera(t, [[0, 1, W / 2, H / 2], [b(9), ZOOM, W / 2, H / 2]]);
+  applyCamera($('world'), cam, W, H, { punch: punch(t, b(4), 0.012) });
+
+  // linha desenha da esquerda (batidas 0–2)
+  $('line').style.transform = `scaleX(${E.outExpo(prog(t, b(0), b(2)))})`;
+
+  // palavras sobem pela máscara, letra a letra
+  rise(L1, t, b(2), { stagger: 0.04, dur: b(1.4) });
+  rise(L2, t, b(4), { stagger: 0.04, dur: b(1.4) });
+
+  // cor de destaque inunda a partir da ponta da linha (batida 8) e vira o fundo do final
+  const k = E.inOutCubic(prog(t, b(8), b(8.8)));
+  show($('flood'), k > 0);
+  flood($('flood'), k, FX, FY, W, H);
+
+  // final: só depois de a cor cobrir tudo; segura até o fim (≥ 1s)
+  show($('end'), t >= b(8.8));
+  rise(E1, t, b(8.8), { stagger: 0.03, dur: b(1.2) });
+  $('e2').textContent = typeOn('index.html → playwright → ffmpeg → mp4', prog(t, b(9.6), b(10.6)));
+
+  film.render(t);
+}
+
+// ---------- trilha sintetizada (mesma grade) ----------
+async function audio() {
+  const sr = 48000;
+  const ctx = new OfflineAudioContext(2, Math.ceil(sr * DURATION), sr);
+  const master = ctx.createGain();
+  master.gain.value = 0.8;
+  master.connect(ctx.destination);
+  const s = synth(ctx, master);
+  s.whoosh(b(1), b(2));
+  for (let n = 2; n < 8; n++) s.kick(b(n), n === 2 || n === 4 ? 1 : 0.6);
+  for (let n = 2; n < 8; n++) s.hat(b(n + 0.5));
+  s.pad(b(2), b(6), [57, 60, 64], 0.04);
+  s.riser(b(6.5), b(8), 0.08);
+  s.impact(b(8));
+  const text = 'index.html → playwright → ffmpeg → mp4';
+  for (let i = 0; i < text.length; i += 2) s.tick(b(9.6) + (i / text.length) * b(1));
+  return ctx.startRendering();
+}
+
+define({ width: W, height: H, duration: DURATION, fps: 60, bpm: BPM, formats: ['16x9', '9x16', '1x1', '4x5'], seek, audio, ready: setup() });
+</script>
+</body>
+</html>

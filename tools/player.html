@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Preview — Motion Studio</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b0c0e; --panel: #15171b; --line: #2a2e35; --ink: #ecebe6; --muted: #8b919a; --accent: #ff4d1f; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 13px/1.4 system-ui, sans-serif; display: grid; grid-template-rows: auto 1fr auto; }
+  header, footer { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 14px; background: var(--panel); }
+  header { border-bottom: 1px solid var(--line); }
+  footer { border-top: 1px solid var(--line); flex-direction: column; align-items: stretch; gap: 8px; }
+  button { background: #1d2026; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer; }
+  button[aria-pressed='true'] { border-color: var(--accent); }
+  .sp { flex: 1; }
+  .mono { font-family: ui-monospace, Menlo, monospace; }
+  #name { font-weight: 600; }
+  #time { color: var(--muted); }
+  #wrap { position: relative; overflow: hidden; display: grid; place-items: center; min-height: 0; }
+  #box { position: relative; box-shadow: 0 0 0 1px var(--line); }
+  #frame { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #000; }
+  #over { position: absolute; inset: 0; pointer-events: none; transform-origin: 0 0; }
+  #err { position: absolute; inset: 16px; display: none; background: #2a0f0c; color: #ffd2c7; border: 1px solid var(--accent); border-radius: 8px; padding: 14px; white-space: pre-wrap; overflow: auto; z-index: 3; }
+  #tl { position: relative; height: 48px; background: #0f1114; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; user-select: none; touch-action: none; overflow: hidden; }
+  #tl .beat { position: absolute; bottom: 0; width: 1px; height: 28%; background: #3a3f48; }
+  #tl .bar { height: 55%; background: #5b616c; }
+  #tl .chap { position: absolute; bottom: 0; top: 0; width: 2px; background: var(--accent); }
+  #tl .chapl { position: absolute; bottom: 2px; font: 10px system-ui; color: var(--accent); padding-left: 5px; white-space: nowrap; }
+  #tl .sec { position: absolute; top: 2px; font: 10px ui-monospace, monospace; color: var(--muted); padding-left: 3px; border-left: 1px dashed var(--line); height: 14px; }
+  #ph { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; pointer-events: none; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hint { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <span id="name" class="mono">—</span>
+  <span id="fmts" class="row"></span>
+  <button id="safe" aria-pressed="false" title="S">Zona segura</button>
+  <button id="grid" aria-pressed="false" title="G">Grade</button>
+  <span class="sp"></span>
+  <span id="time" class="mono">—</span>
+</header>
+<div id="wrap">
+  <div id="box"><iframe id="frame" title="cena"></iframe><canvas id="over"></canvas></div>
+  <div id="err"></div>
+</div>
+<footer>
+  <div id="tl"><div id="ph"></div></div>
+  <div class="row">
+    <button id="play" title="Espaço">▶ Play</button>
+    <button id="prev" title="←">−1 q</button>
+    <button id="next" title="→">+1 q</button>
+    <button id="copy" class="mono" title="C">copiar --at</button>
+    <span class="hint" id="info"></span>
+    <span class="sp"></span>
+    <span class="hint">Espaço play · ←/→ quadro · Shift ±1 batida · 1–4 formato · S zona segura · G grade · R recarregar · C copiar comando</span>
+  </div>
+</footer>
+<script>
+const FMT = { '16x9': [1920, 1080, [0.05, 0.05, 0.05, 0.05]], '9x16': [1080, 1920, [0.15, 0.15, 0.2, 0.06]], '1x1': [1080, 1080, [0.06, 0.06, 0.06, 0.06]], '4x5': [1080, 1350, [0.06, 0.06, 0.08, 0.06]] };
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+const project = q.get('p');
+const st = { fmt: q.get('format') || '16x9', t: 0, playing: false, safe: false, grid: false, meta: null };
+let audio = null, actx = null, srcNode = null, clock0 = 0, t0 = 0;
+
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (FMT[h.get('f')]) st.fmt = h.get('f');
+  st.t = Number(h.get('t') || 0);
+  st.safe = h.get('safe') === '1';
+  st.grid = h.get('grid') === '1';
+}
+function writeHash() {
+  const h = new URLSearchParams({ f: st.fmt, t: st.t.toFixed(3) });
+  if (st.safe) h.set('safe', '1');
+  if (st.grid) h.set('grid', '1');
+  history.replaceState(null, '', `#${h}`);
+}
+
+function fit() {
+  const [W, H] = FMT[st.fmt];
+  const r = $('wrap').getBoundingClientRect();
+  const s = Math.min((r.width - 32) / W, (r.height - 32) / H);
+  $('box').style.width = `${W * s}px`;
+  $('box').style.height = `${H * s}px`;
+  Object.assign($('frame').style, { width: `${W}px`, height: `${H}px`, transform: `scale(${s})` });
+  const c = $('over');
+  c.width = W; c.height = H;
+  Object.assign(c.style, { width: `${W}px`, height: `${H}px`, transform: `scale(${s})` });
+  drawOverlay();
+}
+
+function drawOverlay() {
+  const [W, H, [top, right, bottom, left]] = FMT[st.fmt];
+  const c = $('over'), g = c.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  if (st.safe) {
+    g.fillStyle = 'rgba(255,77,31,.18)';
+    g.fillRect(0, 0, W, H * top); g.fillRect(0, H * (1 - bottom), W, H * bottom);
+    g.fillRect(W * (1 - right), H * top, W * right, H * (1 - top - bottom));
+    g.fillRect(0, H * top, W * left, H * (1 - top - bottom));
+    g.strokeStyle = '#ff4d1f'; g.lineWidth = 3; g.setLineDash([16, 10]);
+    g.strokeRect(W * left, H * top, W * (1 - left - right), H * (1 - top - bottom));
+  }
+  if (st.grid) {
+    g.strokeStyle = 'rgba(0,200,255,.55)'; g.lineWidth = 2; g.setLineDash([]);
+    const m = Math.min(W, H) * 0.06;
+    g.strokeRect(m, m, W - 2 * m, H - 2 * m);
+    for (let i = 1; i < 3; i++) {
+      g.beginPath(); g.moveTo((W * i) / 3, 0); g.lineTo((W * i) / 3, H); g.stroke();
+      g.beginPath(); g.moveTo(0, (H * i) / 3); g.lineTo(W, (H * i) / 3); g.stroke();
+    }
+  }
+}
+
+function load() {
+  pause();
+  $('err').style.display = 'none';
+  st.meta = null;
+  $('name').textContent = project;
+  // parâmetros extras da URL do player vão para a cena (ex.: &peca=lower&nome=Ana)
+  const extra = new URLSearchParams([...q].filter(([k]) => k !== 'p' && k !== 'format'));
+  $('frame').src = `/${project}/index.html?render=1&format=${st.fmt}${extra.toString() ? `&${extra}` : ''}`;
+  fit();
+  writeHash();
+}
+
+$('frame').addEventListener('load', async () => {
+  const w = $('frame').contentWindow;
+  w.addEventListener('error', (e) => showErr(e.message));
+  try {
+    for (let i = 0; i < 200 && !w.STUDIO; i++) await new Promise((r) => setTimeout(r, 25));
+    if (!w.STUDIO) throw new Error('a cena não definiu window.STUDIO');
+    await w.STUDIO.ready;
+    await w.document.fonts.ready;
+    const { width, height, duration, fps = 60 } = w.STUDIO;
+    let bpm = w.STUDIO.bpm;
+    try { if (!bpm) bpm = w.eval('typeof BPM !== "undefined" ? BPM : undefined'); } catch {}
+    st.meta = { width, height, duration, fps, bpm, chapters: w.STUDIO.chapters };
+    st.t = Math.min(st.t, duration);
+    buildTimeline();
+    await paint(st.t);
+    loadAudio(w);
+  } catch (err) { showErr(err.stack || String(err)); }
+});
+
+async function loadAudio(w) {
+  audio = null;
+  try {
+    actx = actx || new AudioContext();
+    if (typeof w.STUDIO.audio === 'function') {
+      $('info').textContent = 'gerando áudio…';
+      const buf = await w.STUDIO.audio();
+      const copy = actx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+      for (let c = 0; c < buf.numberOfChannels; c++) copy.copyToChannel(buf.getChannelData(c), c);
+      audio = copy;
+    } else {
+      for (const ext of ['wav', 'mp3', 'm4a', 'ogg']) {
+        const r = await fetch(`/${project}/audio.${ext}`);
+        if (r.ok) { audio = await actx.decodeAudioData(await r.arrayBuffer()); break; }
+      }
+    }
+  } catch (err) { console.warn(err); }
+  const m = st.meta;
+  $('info').textContent = `${m.width}×${m.height} · ${m.duration.toFixed(2)}s · ${m.fps}fps${m.bpm ? ` · ${m.bpm} BPM` : ''} · ${audio ? 'com áudio' : 'sem áudio'}`;
+}
+
+function buildTimeline() {
+  const tl = $('tl');
+  tl.querySelectorAll('.beat,.sec,.chap,.chapl').forEach((e) => e.remove());
+  const { duration, bpm } = st.meta;
+  for (let s = 0; s < duration; s += duration > 40 ? 5 : 1) {
+    const d = document.createElement('div'); d.className = 'sec'; d.style.left = `${(s / duration) * 100}%`; d.textContent = `${s}s`; tl.appendChild(d);
+  }
+  for (const c of st.meta.chapters || []) {
+    const m = document.createElement('div'); m.className = 'chap'; m.style.left = `${(c.t / duration) * 100}%`; tl.appendChild(m);
+    const l = document.createElement('div'); l.className = 'chapl'; l.style.left = `${(c.t / duration) * 100}%`; l.textContent = c.title; tl.appendChild(l);
+  }
+  if (bpm) {
+    const beat = 60 / bpm;
+    for (let n = 0; n * beat < duration; n++) {
+      const d = document.createElement('div'); d.className = `beat${n % 4 === 0 ? ' bar' : ''}`; d.style.left = `${((n * beat) / duration) * 100}%`; tl.appendChild(d);
+    }
+  }
+}
+
+let painting = false, pending = null;
+async function paint(t) {
+  if (!st.meta) return;
+  st.t = Math.max(0, Math.min(st.meta.duration, t));
+  if (painting) { pending = st.t; return; }
+  painting = true;
+  try {
+    const w = $('frame').contentWindow;
+    await w.STUDIO.seek(st.t);
+    for (const a of w.document.getAnimations()) { a.pause(); a.currentTime = st.t * 1000; }
+  } catch (err) { showErr(err.stack || String(err)); }
+  painting = false;
+  const { duration, fps, bpm } = st.meta;
+  $('ph').style.left = `${(st.t / duration) * 100}%`;
+  $('time').textContent = `${st.t.toFixed(3)}s · q${Math.round(st.t * fps)}${bpm ? ` · batida ${(st.t / (60 / bpm)).toFixed(2)}` : ''}`;
+  if (!st.playing) writeHash();
+  if (pending !== null) { const p = pending; pending = null; paint(p); }
+}
+
+function play() {
+  if (!st.meta) return;
+  if (st.t >= st.meta.duration - 1e-3) st.t = 0;
+  st.playing = true;
+  $('play').textContent = '❚❚ Pausar';
+  t0 = st.t;
+  if (audio && actx) {
+    actx.resume();
+    srcNode = actx.createBufferSource(); srcNode.buffer = audio; srcNode.connect(actx.destination);
+    srcNode.start(0, t0);
+    clock0 = actx.currentTime;
+  } else clock0 = performance.now() / 1000;
+  const tick = () => {
+    if (!st.playing) return;
+    const now = audio && actx ? actx.currentTime : performance.now() / 1000;
+    const t = t0 + (now - clock0);
+    if (t >= st.meta.duration) { paint(st.meta.duration); pause(); return; }
+    paint(t);
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function pause() {
+  st.playing = false;
+  $('play').textContent = '▶ Play';
+  try { srcNode?.stop(); } catch {}
+  srcNode = null;
+  writeHash();
+}
+
+function showErr(msg) { $('err').textContent = msg; $('err').style.display = 'block'; }
+
+function scrubFrom(e) {
+  const r = $('tl').getBoundingClientRect();
+  pause();
+  paint(((e.clientX - r.left) / r.width) * st.meta.duration);
+}
+$('tl').addEventListener('pointerdown', (e) => {
+  if (!st.meta) return;
+  $('tl').setPointerCapture(e.pointerId);
+  scrubFrom(e);
+  const move = (ev) => scrubFrom(ev);
+  $('tl').addEventListener('pointermove', move);
+  $('tl').addEventListener('pointerup', () => $('tl').removeEventListener('pointermove', move), { once: true });
+});
+
+const stepFrames = (n) => { pause(); paint(st.t + n / st.meta.fps); };
+const stepBeats = (n) => { pause(); const beat = st.meta.bpm ? 60 / st.meta.bpm : 1; paint(Math.round((st.t + n * beat) / beat) * beat); };
+$('play').onclick = () => (st.playing ? pause() : play());
+$('prev').onclick = () => stepFrames(-1);
+$('next').onclick = () => stepFrames(1);
+$('copy').onclick = () => navigator.clipboard?.writeText(`node render.mjs ${project} --at ${st.t.toFixed(3)}${st.fmt !== '16x9' ? ` --format ${st.fmt}` : ''}`);
+$('safe').onclick = () => { st.safe = !st.safe; $('safe').setAttribute('aria-pressed', st.safe); drawOverlay(); writeHash(); };
+$('grid').onclick = () => { st.grid = !st.grid; $('grid').setAttribute('aria-pressed', st.grid); drawOverlay(); writeHash(); };
+
+for (const f of Object.keys(FMT)) {
+  const bt = document.createElement('button');
+  bt.textContent = f; bt.dataset.f = f;
+  bt.onclick = () => { st.fmt = f; markFmt(); load(); };
+  $('fmts').appendChild(bt);
+}
+const markFmt = () => document.querySelectorAll('#fmts button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.f === st.fmt));
+
+addEventListener('keydown', (e) => {
+  if (!st.meta) return;
+  const k = e.key;
+  if (k === ' ') { e.preventDefault(); st.playing ? pause() : play(); }
+  else if (k === 'ArrowLeft') e.shiftKey ? stepBeats(-1) : stepFrames(-1);
+  else if (k === 'ArrowRight') e.shiftKey ? stepBeats(1) : stepFrames(1);
+  else if (k >= '1' && k <= '4') { st.fmt = Object.keys(FMT)[Number(k) - 1]; markFmt(); load(); }
+  else if (k === 's' || k === 'S') $('safe').click();
+  else if (k === 'g' || k === 'G') $('grid').click();
+  else if (k === 'r' || k === 'R') load();
+  else if (k === 'c' || k === 'C') $('copy').click();
+});
+addEventListener('resize', fit);
+
+readHash();
+markFmt();
+$('safe').setAttribute('aria-pressed', st.safe);
+$('grid').setAttribute('aria-pressed', st.grid);
+if (!project) showErr('Abra pelo comando: node tools/preview.mjs projects/<nome>');
+else load();
+</script>
+</body>
+</html>
