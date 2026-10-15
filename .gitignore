@@ -12,3 +12,4 @@ references/videos/
 # vídeos são saídas: cada projeto fica só na máquina (o estúdio versiona as ferramentas)
 projects/*
 !projects/_template/
+!projects/cine-demo/

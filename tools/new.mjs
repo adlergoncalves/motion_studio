@@ -27,9 +27,14 @@ const template = fs.readFileSync(path.join(ROOT, 'templates', 'briefing.md'), 'u
 const brief = `# ${name}\n\nCriado em ${today}.\n\n${template}`;
 fs.writeFileSync(path.join(dest, 'brief.md'), brief);
 
-console.log(`✓ projects/${name} criado (template + kit compartilhado + brief.md)
+// planejamento de texto: a cena não começa antes dele (tools/plan.mjs --check)
+const roteiro = fs.readFileSync(path.join(ROOT, 'templates', 'roteiro.md'), 'utf8');
+fs.writeFileSync(path.join(dest, 'roteiro.md'), `# ${name}\n\nCriado em ${today}.\n\n${roteiro}`);
+
+console.log(`✓ projects/${name} criado (template + kit compartilhado + brief.md + roteiro.md)
 Próximos passos:
-  1. preencha projects/${name}/brief.md
+  1. preencha projects/${name}/brief.md e projects/${name}/roteiro.md
+  1b. node tools/plan.mjs projects/${name} --check
   2. node tools/preview.mjs projects/${name}
   3. node render.mjs projects/${name} --stills 8
   4. node render.mjs projects/${name} --check`);

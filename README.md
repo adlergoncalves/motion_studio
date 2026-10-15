@@ -35,6 +35,7 @@ The demo outputs to `projects/_template/out/`, which is ignored by Git.
 
 ```bash
 node tools/new.mjs launch-card
+node tools/plan.mjs projects/launch-card --check
 node tools/preview.mjs projects/launch-card
 node render.mjs projects/launch-card --check
 node render.mjs projects/launch-card --stills 8
@@ -42,6 +43,28 @@ node render.mjs projects/launch-card --format all --social
 ```
 
 Projects use the shared `/lib` runtime. That avoids duplicated fonts and runtime code; update the kit once and validate all active projects before delivery.
+
+## Plan before you code
+
+`node tools/new.mjs` writes `brief.md` and `roteiro.md` into the project. `roteiro.md` is the text plan:
+promise, narration line by line, every on-screen block, the chapter map and the per-chapter camera and optics
+direction. `node tools/plan.mjs projects/<name> --check` exits non-zero while the plan is still boilerplate,
+so it can gate delivery. See `docs/art-direction.md`.
+
+## Cinematic layer
+
+`lib/cine.js` adds a camera that never stops, depth planes with parallax, optics (vignette, film grain,
+halation, shutter blur, light leaks, letterbox bars, flash cuts) and per-chapter colour grading — all as pure
+functions of `t`. See `docs/cinematic-language.md`.
+
+```js
+const C = Studio.cine.rig(stage, { W, H, look: 'teal' });
+const bg = C.plate({ depth: 1 }), mid = C.plate({ depth: 0.42 }), fg = C.plate({ depth: 0.1 });
+// inside seek(t):
+const cam = C.move(t, CAM);
+C.apply(bg.el, cam, 1); C.apply(mid.el, cam, 0.42); C.apply(fg.el, cam, 0.1);
+C.render(t, { bars: 1, vignette: 1, flash: Studio.cine.flash(t, 2.45) });
+```
 
 ## Scene contract
 
