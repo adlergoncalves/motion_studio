@@ -13,3 +13,4 @@ references/videos/
 projects/*
 !projects/_template/
 !projects/cine-demo/
+!projects/alinhamento/

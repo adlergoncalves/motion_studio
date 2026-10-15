@@ -66,6 +66,12 @@ C.apply(bg.el, cam, 1); C.apply(mid.el, cam, 0.42); C.apply(fg.el, cam, 0.1);
 C.render(t, { bars: 1, vignette: 1, flash: Studio.cine.flash(t, 2.45) });
 ```
 
+## Composition
+
+`lib/compose.js` holds the frame-building primitives — the layer where the idea lives: `slats` (the frame as
+sliding strips that reassemble on a beat), `card` (collage block with a hard shadow), `strike`, `ruler` and
+`tick`. See `docs/composition.md`. Reference scene: `projects/alinhamento`.
+
 ## Scene contract
 
 A scene must register a time-driven contract:
