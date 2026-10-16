@@ -51,5 +51,6 @@ Solid block, slightly crooked, hard offset shadow. It reads as paper dropped on 
 
 ## Working reference
 
-`projects/alinhamento` (10s, 9:16): type field three screens wide, eight strips, four alignments, red
-correction marks and a paper card at the close.
+Reference scenes live only on the machine that made them: the studio versions the tools, never the
+pieces — client branding, scripts, voice-over and product captures do not belong in a public repo.
+Build your own with `node tools/new.mjs <name>`.

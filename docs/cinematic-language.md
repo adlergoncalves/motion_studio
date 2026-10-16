@@ -70,5 +70,6 @@ stops being readable in a still, and stills are how clients review.
 
 ## Working reference
 
-`projects/cine-demo` is the reference scene: volumetric haze shader on the back plate,
-typography on the mid plate, editorial frame on the front plate, per-chapter grading, flash cuts and bars.
+Reference scenes are not versioned here — the studio ships the tools, the pieces stay local.
+A good first scene: volumetric haze shader on the back plate, typography on the mid plate, editorial
+frame on the front plate, per-chapter grading, flash cuts and bars.

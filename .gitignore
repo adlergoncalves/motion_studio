@@ -9,9 +9,7 @@ node_modules/
 references/videos/
 *.tmp.*
 
-# vídeos são saídas: cada projeto fica só na máquina (o estúdio versiona as ferramentas)
+# vídeos são saídas: cada projeto fica só na máquina (o estúdio versiona as ferramentas,
+# nunca as peças — marca de cliente, roteiro, locução e capturas não vão para repositório público)
 projects/*
 !projects/_template/
-!projects/cine-demo/
-!projects/alinhamento/
-!projects/convite-divulgacao/

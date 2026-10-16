@@ -70,7 +70,7 @@ C.render(t, { bars: 1, vignette: 1, flash: Studio.cine.flash(t, 2.45) });
 
 `lib/compose.js` holds the frame-building primitives — the layer where the idea lives: `slats` (the frame as
 sliding strips that reassemble on a beat), `card` (collage block with a hard shadow), `strike`, `ruler` and
-`tick`. See `docs/composition.md`. Reference scene: `projects/alinhamento`.
+`tick`. See `docs/composition.md`.
 
 ## Scene contract
 
